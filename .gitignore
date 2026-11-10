@@ -1,0 +1,10 @@
+# build outputs
+/build/
+/bin/
+
+# editors / tooling
+.DS_Store
+compile_commands.json
+.cache/
+*.o
+*.d
