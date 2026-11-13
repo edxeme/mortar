@@ -62,6 +62,7 @@ test: $(TEST_BINS)
 	@set -e; for t in $(TESTS); do echo "== $$t =="; $(BIN)/$$t; done
 
 asan:
+	@mkdir -p $(BIN)
 	@set -e; \
 	for t in $(TESTS); do \
 		echo "== $$t (asan) =="; \
