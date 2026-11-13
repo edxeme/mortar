@@ -31,16 +31,17 @@
 #define TW_SPAN 60000u /* ms covered by one full turn */
 #define TW_STEP (TW_SPAN / TW_SLOTS) /* 234 ms per round */
 
-typedef struct timer {
-    struct timer *next;
+/* tw_timer_t: POSIX's <time.h> owns the timer_t name on Linux */
+typedef struct tw_timer {
+    struct tw_timer *next;
     char *key;           /* private copy, freed with the timer */
     uint64_t expires_at; /* absolute deadline, authoritative */
     uint64_t round;      /* wheel round this timer fires in */
     uint8_t cancelled;
-} timer_t;
+} tw_timer_t;
 
 typedef struct {
-    timer_t *slots[TW_SLOTS];
+    tw_timer_t *slots[TW_SLOTS];
     uint64_t round; /* last completed round */
     size_t pending; /* live (non-cancelled) timers */
 } timer_wheel_t;
