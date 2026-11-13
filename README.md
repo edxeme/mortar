@@ -27,13 +27,17 @@ reinforced concrete
   interns keys (reclaimed generationally on rehash), and fixed-size slab
   pools absorb value churn, cascading to `malloc(3)` with a live fallback
   count instead of pretending pools never run out.
-- **Per-key TTL** with lazy eviction on access — no timer thread, no
-  bookkeeping tax on the hot path.
+- **Per-key TTL with two-layer eviction** — a 256-bucket timer wheel
+  reclaims expired keys aggressively on `store_tick` (the caller drives
+  the clock; no background thread), and exact lazy eviction on read
+  stays as the correctness backstop.
 - **A REPL client** (Redis-flavored: `SET key value [EX seconds]`, `GET`,
   `DEL`, `TTL`, `STATS`) that also runs script files, comments included.
 - **Honest observability** — `STATS` reports slab high-water marks, heap
-  fallbacks, tombstone counts, rehashes, and the key arena's footprint.
-- **Test suite that runs under ASan + UBSan**, plus a micro-benchmark.
+  fallbacks, tombstone counts, rehashes, pending expiry timers, and the
+  key arena's footprint.
+- **Test suite that runs under ASan + UBSan**, plus a micro-benchmark
+  and a GitHub Actions matrix (gcc/clang × test/asan).
 
 ## Build
 
@@ -56,10 +60,11 @@ $ cmake --build build-cmake
 
 ## Testing
 
-17 cases across four binaries (`arena`, `mem`, `htab`, `store`), each
-asserting on behavior that matters: alignment guarantees, pool recycling,
-tombstone bookkeeping, rehash survival of 50k entries, TTL semantics
-(`-1` no expiry, `-2` missing), and counter accuracy.
+26 cases across five binaries (`arena`, `mem`, `htab`, `store`,
+`timers`), each asserting on behavior that matters: alignment
+guarantees, pool recycling, tombstone bookkeeping, rehash survival of
+50k entries, TTL semantics (`-1` no expiry, `-2` missing), wheel firing
+order and stale-fire suppression, and counter accuracy.
 
 ```console
 $ make test
@@ -70,12 +75,13 @@ $ make test
 == test_htab ==
   4 case(s), 0 failure(s)
 == test_store ==
+  9 case(s), 0 failure(s)
+== test_timers ==
   5 case(s), 0 failure(s)
 ```
 
 `make asan` runs the same suite with AddressSanitizer and UBSan enabled —
-zero leaks, zero warnings is the bar, and the CI-free workflow still gets
-teeth from it.
+zero leaks, zero warnings is the bar, on your machine and in CI alike.
 
 ## Benchmark
 
@@ -99,6 +105,7 @@ src/        arena.c  block-chained bump allocator (key interning)
             mem.c    slab pools + heap fallback for values
             htab.c   open-addressing table with tombstones
             store.c  TTL, counters, ownership glue — the public API
+            timers.c expiry wheel, driven by the caller's clock
             main.c   REPL client and script runner
 tests/      one binary per module, harness in test.h
 bench/      throughput + allocator utilization harness
