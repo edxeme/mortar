@@ -87,7 +87,9 @@ static void test_active_expiry_without_reads(void) {
     CHECK(store_set(&s, "ephemeral", "value", 30) == 0); /* 30 ms */
     CHECK_STR_EQ(store_get(&s, "ephemeral"), "value");
 
-    msleep(80);
+    /* sleep past one full wheel round so the tick deterministically
+     * reaches the timer's bucket regardless of clock phase */
+    msleep(300);
     /* nobody reads the key: the wheel must reclaim it */
     size_t evicted = store_tick(&s);
     CHECK(evicted == 1);
@@ -112,7 +114,7 @@ static void test_overwrite_without_ttl_cancels_old_timer(void) {
     CHECK(store_set(&s, "k", "with-ttl", 30) == 0);
     CHECK(store_set(&s, "k", "forever", 0) == 0); /* TTL revoked */
 
-    msleep(80);
+    msleep(300);
     store_tick(&s);
     CHECK_STR_EQ(store_get(&s, "k"), "forever"); /* survived the wheel */
     CHECK(s.expirations == 0);
@@ -130,7 +132,7 @@ static void test_overwrite_with_new_ttl_suppresses_stale_fire(void) {
     CHECK(store_set(&s, "k", "short", 30) == 0);
     CHECK(store_set(&s, "k", "longer", 60000) == 0); /* new deadline */
 
-    msleep(80);
+    msleep(300);
     /* the 30 ms timer fires but must be discarded as stale: the entry's
      * current deadline no longer matches */
     store_tick(&s);
@@ -150,7 +152,7 @@ static void test_del_cancels_timer_eagerly(void) {
     CHECK(store_set(&s, "k", "v", 20) == 0);
     CHECK(store_del(&s, "k") == 1);
 
-    msleep(60);
+    msleep(300);
     store_tick(&s); /* timer was cancelled at DEL: nothing to fire */
     CHECK(s.expirations == 0);
 

@@ -28,6 +28,14 @@ void tw_release(timer_wheel_t *w) {
 }
 
 int tw_add(timer_wheel_t *w, const char *key, uint64_t expires_at) {
+    /* anchor the wheel to the absolute clock on the first timer:
+     * rounds are derived from now_ms(), so a wheel that starts at
+     * round 0 cannot reach a bucket whose slot index sits beyond
+     * (now / TW_STEP) — a freshly-booted process would silently skip
+     * its own timers until uptime crossed a full turn */
+    if (w->round == 0) {
+        w->round = expires_at / TW_STEP;
+    }
     tw_timer_t *t = xmalloc(sizeof *t);
     t->key = xstrdup(key);
     t->expires_at = expires_at;
