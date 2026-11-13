@@ -13,10 +13,10 @@ LDFLAGS  ?=
 BIN      := bin
 BUILD    := build
 
-LIB_SRCS := src/util.c src/arena.c src/mem.c src/htab.c src/store.c
+LIB_SRCS := src/util.c src/arena.c src/mem.c src/htab.c src/store.c src/timers.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILD)/%.o)
 
-TESTS    := test_arena test_mem test_htab test_store
+TESTS    := test_arena test_mem test_htab test_store test_timers
 TEST_BINS := $(TESTS:%=$(BIN)/%)
 
 ASAN_FLAGS := -fsanitize=address,undefined -fno-omit-frame-pointer
@@ -54,6 +54,9 @@ $(BIN)/test_htab: $(BUILD)/test_htab.o $(LIB_OBJS) | $(BIN)
 
 $(BIN)/test_store: $(BUILD)/test_store.o $(LIB_OBJS) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(BUILD)/test_store.o $(LIB_OBJS) $(LDFLAGS)
+
+$(BIN)/test_timers: $(BUILD)/test_timers.o $(LIB_OBJS) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(BUILD)/test_timers.o $(LIB_OBJS) $(LDFLAGS)
 
 test: $(TEST_BINS)
 	@set -e; for t in $(TESTS); do echo "== $$t =="; $(BIN)/$$t; done

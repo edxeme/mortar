@@ -13,6 +13,7 @@ add_library(mortar_core STATIC
     src/mem.c
     src/htab.c
     src/store.c
+    src/timers.c
 )
 target_include_directories(mortar_core PUBLIC src)
 target_compile_definitions(mortar_core PUBLIC _POSIX_C_SOURCE=200809L)
@@ -24,7 +25,7 @@ add_executable(mortar_bench bench/bench.c)
 target_link_libraries(mortar_bench PRIVATE mortar_core)
 
 enable_testing()
-foreach(t arena mem htab store)
+foreach(t arena mem htab store timers)
     add_executable(test_${t} tests/test_${t}.c)
     target_link_libraries(test_${t} PRIVATE mortar_core)
     target_include_directories(test_${t} PRIVATE tests)
