@@ -47,6 +47,7 @@ int store_init(store_t *s, const store_config_t *cfg) {
     memset(s, 0, sizeof(*s));
     s->started_ms = now_ms();
     tw_init(&s->wheel);
+    tw_start(&s->wheel, s->started_ms);
     return htab_init(&s->table, c.initial_capacity, value_free,
                      c.key_arena_block);
 }

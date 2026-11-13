@@ -6,6 +6,9 @@
 
 #include "timers.h"
 
+/* The wheel under test keeps its zero-initialized cursor: deadlines
+ * here are absolute values on a virtual clock that starts at 0. */
+
 /* recording callback: log fired (key, expires_at) pairs */
 #define LOG_MAX 64
 static char fired_keys[LOG_MAX][32];

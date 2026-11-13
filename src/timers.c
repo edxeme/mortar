@@ -15,6 +15,15 @@ int tw_init(timer_wheel_t *w) {
     return 0;
 }
 
+/* Rounds are derived from the absolute clock, so the cursor must start
+ * at the current round, not zero: a freshly booted process would
+ * otherwise skip every bucket beyond now/TW_STEP until its uptime
+ * crossed a full turn. Callers on a virtual clock (tests) may keep
+ * the zero-initialized cursor instead. */
+void tw_start(timer_wheel_t *w, uint64_t now_ms) {
+    w->round = now_ms / TW_STEP;
+}
+
 void tw_release(timer_wheel_t *w) {
     for (size_t i = 0; i < TW_SLOTS; i++) {
         tw_timer_t *t = w->slots[i];
@@ -28,14 +37,6 @@ void tw_release(timer_wheel_t *w) {
 }
 
 int tw_add(timer_wheel_t *w, const char *key, uint64_t expires_at) {
-    /* anchor the wheel to the absolute clock on the first timer:
-     * rounds are derived from now_ms(), so a wheel that starts at
-     * round 0 cannot reach a bucket whose slot index sits beyond
-     * (now / TW_STEP) — a freshly-booted process would silently skip
-     * its own timers until uptime crossed a full turn */
-    if (w->round == 0) {
-        w->round = expires_at / TW_STEP;
-    }
     tw_timer_t *t = xmalloc(sizeof *t);
     t->key = xstrdup(key);
     t->expires_at = expires_at;

@@ -52,6 +52,9 @@ typedef void (*tw_fire_fn)(const char *key, uint64_t expires_at,
                            void *userdata);
 
 int tw_init(timer_wheel_t *w);
+/* pins the round cursor to the absolute clock; call once before the
+ * first tw_add when deadlines are real now_ms() values */
+void tw_start(timer_wheel_t *w, uint64_t now_ms);
 void tw_release(timer_wheel_t *w);
 
 int tw_add(timer_wheel_t *w, const char *key, uint64_t expires_at);
