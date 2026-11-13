@@ -5,14 +5,19 @@
 #include <stdint.h>
 
 #include "htab.h"
+#include "timers.h"
 
 /* mortar's public API: an in-memory key-value store with per-key TTL.
  *
  * Both keys and values are copied on store_set(); the caller's buffers
  * are never retained. Values live in the slab layer (mem.h), keys in
- * the table's interning arena. TTL is lazy: an expired entry is
- * reclaimed the next time it is read (or the next put triggers a
- * tombstone sweep) — there is no background timer thread. */
+ * the table's interning arena.
+ *
+ * TTL works in two layers: a timer wheel evicts expired keys
+ * aggressively on store_tick() (single-threaded — no background
+ * thread; the caller drives the clock), and lazy eviction on
+ * store_get() remains the correctness backstop for anything the wheel
+ * has not reached yet. */
 
 typedef struct {
     size_t initial_capacity; /* entry slots, rounded to a power of two */
@@ -21,11 +26,13 @@ typedef struct {
 
 typedef struct {
     htab_t table;
+    timer_wheel_t wheel; /* active expiry: timers per TTL'd key */
     uint64_t sets;
     uint64_t gets;
     uint64_t hits;
     uint64_t misses;
     uint64_t deletes;
+    uint64_t expirations; /* reclaimations by the wheel, not by reads */
     uint64_t started_ms;
 } store_t;
 
@@ -40,6 +47,12 @@ int store_del(store_t *s, const char *key);
 
 /* -1 = exists, no expiry · -2 = missing (or already expired) */
 int64_t store_ttl(store_t *s, const char *key);
+
+/* advances the expiry wheel and evicts every TTL'd key whose deadline
+ * has passed. Call this periodically (the REPL does it once per
+ * command); lazy eviction on store_get remains the correctness
+ * backstop between ticks. Returns the number of keys evicted. */
+size_t store_tick(store_t *s);
 
 uint64_t store_uptime_ms(const store_t *s);
 

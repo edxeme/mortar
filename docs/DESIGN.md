@@ -18,12 +18,14 @@ discipline on every structure here; it is out of scope by design.
 ```
         main.c (REPL / scripts)
               │
-          store.c  ← public API: SET/GET/DEL/TTL, counters
+          store.c  ← public API: SET/GET/DEL/TTL, counters, store_tick
               │
           htab.c   ← open addressing, tombstones, rehash policy
           │      │
      arena.c    mem.c
    (keys)     (values)
+              │
+         timers.c ← expiry wheel, driven by the caller's clock
 ```
 
 Keys and values follow different allocation strategies because they have
@@ -60,18 +62,35 @@ never grow unboundedly (a fallback is cheaper than a lie).
   memory. This one decision is why delete-heavy workloads don't balloon
   the table.
 
-## TTL: lazy eviction
+## TTL: two layers of eviction
 
-Expiry is a timestamp compare on the read path. There is no timer wheel
-and no background thread: an expired entry is reclaimed the moment
-something asks for it. `TTL` for a logically-expired-but-unevicted key
-reports `-2` (missing), which keeps the client-visible semantics coherent
-even before the memory is reclaimed.
+Expiration started as pure lazy eviction — a timestamp compare on the
+read path — and that remains the correctness backstop: `store_get` will
+always reclaim an expired entry it touches. But lazy-only expiry had a
+cost this workload exposes: dead entries hold slab blocks until someone
+re-reads them, and in write-heavy TTL churn most dead keys are never
+read again.
 
-The tradeoff: dead entries hold memory until they are read again or a
-rehash sweeps them. For mortar's use case (interactive sessions,
-workloads that re-read keys) that is the right side of the tradeoff. A
-timer wheel is the honest next step if write-heavy TTL churn matters.
+The second layer is a single-level **timer wheel** (`timers.c`): 256
+buckets × 234 ms per round, one full turn per minute. `store_set` with a
+TTL schedules a timer; `store_tick` — which the REPL calls once per
+command, and an embedding caller drives at will — advances the wheel and
+evicts everything due. No background thread: mortar is single-threaded
+by design, so the *caller* drives the clock.
+
+The interesting decision is **stale-fire tolerance**. Overwriting a key
+does not chase its old timer through the buckets (a 256-bucket walk on
+every write); the old timer simply fires later, and `wheel_fire`
+compares the fired deadline against the entry's current one. Mismatch →
+stale → dropped. The write path stays O(1) amortized, and the wheel's
+memory cost is bounded by explicit cancellation on DEL (the one cold
+path worth the sweep) plus natural drain.
+
+Two properties make the copy safe: the wheel copies keys (hash-table
+rehashes relocate interned key memory, so borrowed pointers would
+dangle), and firing granularity is one round (234 ms) — a timer fires
+up to a round late, which is invisible to clients because `GET`'s lazy
+check is exact.
 
 ## Ownership contract
 
@@ -100,6 +119,11 @@ rules:
 ## Known tradeoffs
 
 - Tombstoned keys keep their arena bytes until the next rehash.
+- Timer firing granularity is one wheel round (234 ms); lazy eviction
+  on read remains exact.
+- A wheel timer per TTL'd key costs ~48 bytes plus its key copy. At
+  millions of live TTLs a hierarchical wheel or a heap would be the
+  honest next step.
 - Single-threaded; see non-goals.
 - Value payloads round up to 16 bytes; tiny values cost 16 extra header
   bytes. At mortar's scale that is cheaper than a side index.

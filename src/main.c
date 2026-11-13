@@ -123,6 +123,8 @@ static int cmd_stats(store_t *s, int argc, char **argv) {
     printf("reads          %llu hit, %llu miss (%.1f%% hit rate)\n",
            (unsigned long long)s->hits, (unsigned long long)s->misses,
            hit_rate);
+    printf("expiry wheel   %zu timer(s) pending, %llu active expiration(s)\n",
+           tw_pending(&s->wheel), (unsigned long long)s->expirations);
     printf("uptime         %llum%llds\n",
            (long long)(store_uptime_ms(s) / 60000),
            (long long)((store_uptime_ms(s) % 60000) / 1000));
@@ -242,6 +244,10 @@ static int repl(FILE *in, store_t *s, bool prompt) {
         if (cmd->fn(s, argc, argv) != 0) {
             break;
         }
+
+        /* the caller drives the clock: one wheel advance per command
+         * actively reclaims TTL'd keys without a background thread */
+        store_tick(s);
     }
 
     free(line);

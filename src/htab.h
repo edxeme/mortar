@@ -59,8 +59,12 @@ void htab_release(htab_t *t);
 /* returns 1 if inserted, 0 if an existing key was replaced */
 int htab_put(htab_t *t, const char *key, void *value, uint64_t expires_at);
 
-/* lazily evicts the entry if now_ms() has passed its expiry */
+/* lazily evicts the entry if now_ms() has passed its expiry; when
+ * evicted_out is non-NULL it is set to 1 iff this call performed a
+ * lazy eviction (vs. a plain miss) */
 void *htab_get(htab_t *t, const char *key, uint64_t now_ms);
+void *htab_get_ex(htab_t *t, const char *key, uint64_t now_ms,
+                  int *evicted_out);
 
 /* returns 1 if the entry existed and was removed */
 int htab_del(htab_t *t, const char *key);

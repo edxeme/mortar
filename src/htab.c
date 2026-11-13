@@ -136,6 +136,14 @@ int htab_put(htab_t *t, const char *key, void *value, uint64_t expires_at) {
 }
 
 void *htab_get(htab_t *t, const char *key, uint64_t now_ms) {
+    return htab_get_ex(t, key, now_ms, NULL);
+}
+
+void *htab_get_ex(htab_t *t, const char *key, uint64_t now_ms,
+                  int *evicted_out) {
+    if (evicted_out != NULL) {
+        *evicted_out = 0;
+    }
     uint64_t h = fnv1a64(key);
     size_t mask = t->capacity - 1u;
 
@@ -158,6 +166,9 @@ void *htab_get(htab_t *t, const char *key, uint64_t now_ms) {
                 e->state = HT_TOMBSTONE;
                 t->size--;
                 t->tombstones++;
+                if (evicted_out != NULL) {
+                    *evicted_out = 1;
+                }
                 return NULL;
             }
             return e->value;
